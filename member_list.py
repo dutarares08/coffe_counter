@@ -1,10 +1,10 @@
 member_list = [
     {
-        "tag_id":"1212",
-        "full_name":"rares ddd",
+        "tag_id":"11111",
+        "full_name":"Rares D.",
     },
     {
         "tag_id":"22222",
-        "full_name":"ana anaa",
+        "full_name":"Anamaria P.",
     },
 ]
