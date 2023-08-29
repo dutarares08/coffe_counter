@@ -27,6 +27,7 @@ def create_csv():
 def increment_quantity_by_id(tag_id):
     new_lines=[]
     user_found=None
+    member_name=None
 
     with open("/sdcard/coffee_report.csv", 'r') as file:
         lines = file.readlines()
@@ -43,6 +44,7 @@ def increment_quantity_by_id(tag_id):
                     "user_name":str(values[1]),
                     "quantity":str(old_value+1),
                 }
+                member_name=str(values[1])
                 values[2] = str(old_value+1)
                 new_lines.append(','.join(values) + '\n')
             else:
@@ -73,7 +75,13 @@ def increment_quantity_by_id(tag_id):
             "user_name":str(member_name),
             "quantity":"1",
         }
-        
+    
+    try:
+        with open("/backup_logs.txt", "a") as file:
+            file.write(f"{tag_id} | {member_name} | 1\n")
+    except Exception as e:
+        print("Error on backup file")
+        return False
     
     try:
         with open("/sdcard/coffee_report.csv", 'w') as file:

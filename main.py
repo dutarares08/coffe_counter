@@ -1,4 +1,10 @@
-from machine import Pin, SPI, I2C, PWM
+#################################################################
+########  Designed and maintained by Rares Duta     #############
+######## This project is under MIT license          #############
+#################################################################
+
+
+from machine import Pin, SPI, I2C, PWM, deepsleep
 from ssd1306 import SSD1306_I2C
 from mfrc522 import MFRC522
 from utils import increment_quantity_by_id, create_csv
@@ -15,14 +21,21 @@ import framebuf
 ##################################################
 DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT= 64
+SCREEN_OFF_TIMEOUT = 18*1000 # 18 Seconds
+# DEEP_SLEEP_TIMOUT =  30*1000 # 60 minutes ##############3testtt
+DEEP_SLEEP_TIMEOUT =  60*60*1000 # 60 minutes
+EXIT_MENU_TIMEOUT = 6*1000
 
 loaded_data_from_sheet = [] # See data struct type in member list
 
+light_sleep_on = False
+deep_sleep_on = False
+deep_sleep_timmer = None
 no_sd_card_err = False
 counter_to_screen_off=None
 query_menu_on = False
-query_menu_timmer = None # Timer that reset counting after each btn press. If not press for x seconds exit menu |  also exist on card scan 
 query_current_slide = 0
+query_menu_timmer = None
 
 
 
@@ -98,6 +111,8 @@ smallest_coffee_fb=framebuf.FrameBuffer(smallest_coffee, 20, 20, framebuf.MONO_H
 
 
 def boot_setup():
+    status_led.value(1)
+
     lcd_display.fill(0)
     lcd_display.blit(coffee_fb, 32, 4)
     lcd_display.show()
@@ -189,7 +204,7 @@ def update_local_loaded_data(tag_id):
     loaded_data_from_sheet = reconstructed_list
 
 def show_normal_screen():
-    global counter_to_screen_off
+    global counter_to_screen_off, deep_sleep_timmer
     lcd_display.fill(0)
     lcd_display.blit(small_coffee_fb, 49, 4)
     font_writer.set_textpos(20, 40)
@@ -197,6 +212,7 @@ def show_normal_screen():
     lcd_display.show()
 
     counter_to_screen_off=utime.ticks_ms()
+    deep_sleep_timmer=utime.ticks_ms()
 
 
 
@@ -246,23 +262,24 @@ if device_booted:
 
 
 
-# poweroff() for display
-
-
-# temporar
-# lcd_display.poweroff()
-# pin_14 = Pin(14, mode=Pin.IN, pull=Pin.PULL_UP)
 
 counter_to_screen_off=utime.ticks_ms()
+deep_sleep_timmer=utime.ticks_ms()
+
+
 
 while device_booted:
 
-    print("Status up ", scroll_up.value())
-    print("Status down ", scroll_down.value())
 
     if scroll_up.value() == 0 or scroll_down.value() == 0:
+        
+        if light_sleep_on:
+            lcd_display.poweron()
+
         short_beep_sound()
         counter_to_screen_off=utime.ticks_ms()
+        deep_sleep_timmer=utime.ticks_ms()
+        query_menu_timmer = utime.ticks_ms()
 
         if not query_menu_on:
             query_menu_on = True
@@ -280,6 +297,7 @@ while device_booted:
                     query_current_slide=query_current_slide-1        
     
     if query_menu_on:
+
         current = loaded_data_from_sheet[query_current_slide]
         show_user_data(current['full_name'], current['quantity'])
 
@@ -289,13 +307,14 @@ while device_booted:
     if stat == reader.OK:
         (stat, uid) = reader.SelectTagSN()
         if stat == reader.OK:
+            if light_sleep_on:
+                lcd_display.poweron()
 
-            # here start show animation
             card = int.from_bytes(bytes(uid),"little",False)
-            print("CARD ID: "+str(card))
 
-            # lcd_display.poweron()
             counter_to_screen_off=None
+            deep_sleep_timmer = utime.ticks_ms()
+
             query_menu_on=False
             query_current_slide=0
 
@@ -332,7 +351,7 @@ while device_booted:
             else:
                 read_tag_sound()
                 update_local_loaded_data(str(card))
-                print("Result ", update_result)
+                # print("Result ", update_result)
                 # update excel doc and retreive data about name and quantity
                 # after updating document show this
                 show_user_data(update_result['user_name'], update_result['quantity'])
@@ -341,12 +360,28 @@ while device_booted:
 
 
     
-    if counter_to_screen_off is not None and utime.ticks_diff(current_ticks, counter_to_screen_off) > 12000:
-        query_menu_on = False
-        lcd_display.fill(0)
-        lcd_display.show()
-        counter_to_screen_off = None
+    
 
+    
+    if query_menu_timmer is not None and utime.ticks_diff(current_ticks, query_menu_timmer) > EXIT_MENU_TIMEOUT:
+        query_menu_on = False
+        query_current_slide = 0
+        query_menu_timmer = None
+        show_normal_screen()
+
+    if counter_to_screen_off is not None and utime.ticks_diff(current_ticks, counter_to_screen_off) > SCREEN_OFF_TIMEOUT:
+        query_menu_on = False
+        lcd_display.poweroff()
+        light_sleep_on=True
+        counter_to_screen_off = None
+        query_menu_timmer = None
+
+    if deep_sleep_timmer is not None and utime.ticks_diff(current_ticks, counter_to_screen_off) > DEEP_SLEEP_TIMEOUT:
+        reader.sleep()
+        lcd_display.poweroff()
+        status_led.value(0)
+        deepsleep()
+    
     if query_menu_on:
         utime.sleep_ms(35)
     else:
@@ -359,7 +394,7 @@ while device_booted:
 ############## TODO ##############################
 ##################################################
 
-# 1) Failback to internal flash
-# 2) Notepad logs
-# 3) Sleep mode optimize
-# 4) led for deeep sleep mode
+# 1) Failback to internal flash - done
+# 2) Notepad logs - done
+# 3) Sleep mode optimize - done
+# 4) led for deeep sleep mode - done
