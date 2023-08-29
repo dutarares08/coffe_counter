@@ -15,16 +15,15 @@ import framebuf
 ##################################################
 DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT= 64
+
+loaded_data_from_sheet = [] # See data struct type in member list
+
 no_sd_card_err = False
 counter_to_screen_off=None
+query_menu_on = False
+query_menu_timmer = None # Timer that reset counting after each btn press. If not press for x seconds exit menu |  also exist on card scan 
+query_current_slide = 0
 
-recently_used=[
-    # This is how objects form this list will look like
-    # {
-    #     "tag_id":"",
-    #     "used_ticks":1232
-    # }
-]
 
 
 ###################################################
@@ -35,9 +34,16 @@ sdcard_sck = Pin(18)
 sdcard_mosi=Pin(19)
 sdcard_miso=Pin(16)
 
+
 lcd_scl = Pin(1)
 lcd_sda = Pin(0)
-buzzer = PWM(Pin(15))
+buzzer = PWM(Pin(28))
+status_led = Pin(21, Pin.OUT, Pin.PULL_DOWN)
+
+scroll_up = Pin(26, Pin.IN, Pin.PULL_UP)
+scroll_down = Pin(27, Pin.IN, Pin.PULL_UP)
+
+
 
 ###################################################
 ########   Protocols and communication init
@@ -62,7 +68,6 @@ lcd_i2c=I2C(0, scl=lcd_scl, sda=lcd_sda, freq=200000)
 ##################################################
 lcd_display = SSD1306_I2C(DISPLAY_WIDTH, DISPLAY_HEIGHT, lcd_i2c)
 font_writer = writer.Writer(lcd_display, freesans20)
-# reader = MFRC522(spi_id=0,sck=6,miso=4,mosi=7,cs=5,rst=22)
 reader = MFRC522(spi_id=1,sck=10,miso=12,mosi=11,cs=9,rst=22)
 
 try:
@@ -144,6 +149,23 @@ def boot_setup():
             lcd_display.show()
             return False
 
+    # upload to global variables data readed on init seq
+    
+    try:
+        with open("/sdcard/coffee_report.csv", 'r') as file:
+            lines = file.readlines()
+            for line in lines:
+                values = line.strip().split(',')
+                loaded_data_from_sheet.append({
+                    "tag_id": values[0],
+                    "full_name":values[1],
+                    "quantity": values[2] if values[2] else 0    
+                })
+        loaded_data_from_sheet.pop(0)
+    except Exception as e:
+        print("Exception, ", e)
+        return False
+
     return True
 
 
@@ -151,6 +173,20 @@ def boot_setup():
 
 
 
+def update_local_loaded_data(tag_id):
+    global loaded_data_from_sheet
+    reconstructed_list = []
+    for member in loaded_data_from_sheet:
+        if member['tag_id'] == tag_id:
+            reconstructed_list.append({
+                "tag_id":tag_id,
+                "full_name":member['full_name'],
+                "quantity":str(int(member['quantity'])+1)
+            })
+        else:
+            reconstructed_list.append(member)
+
+    loaded_data_from_sheet = reconstructed_list
 
 def show_normal_screen():
     global counter_to_screen_off
@@ -164,7 +200,7 @@ def show_normal_screen():
 
 
 
-def show_user_data_after_increment(full_name, quantity):
+def show_user_data(full_name, quantity):
     lcd_display.fill(0)
     font_writer.set_textpos(5, 5)
     font_writer.printstring(full_name)
@@ -174,6 +210,12 @@ def show_user_data_after_increment(full_name, quantity):
     font_writer.printstring(quantity)
     lcd_display.show()
     
+
+def short_beep_sound():
+    buzzer.duty_u16(18000)
+    buzzer.freq(3523)
+    utime.sleep(0.1)
+    buzzer.duty_u16(0)
 
 
 def read_tag_sound():
@@ -208,11 +250,40 @@ if device_booted:
 
 
 # temporar
-lcd_display.poweroff()
-pin_14 = Pin(14, mode=Pin.IN, pull=Pin.PULL_UP)
+# lcd_display.poweroff()
+# pin_14 = Pin(14, mode=Pin.IN, pull=Pin.PULL_UP)
 
+counter_to_screen_off=utime.ticks_ms()
 
 while device_booted:
+
+    print("Status up ", scroll_up.value())
+    print("Status down ", scroll_down.value())
+
+    if scroll_up.value() == 0 or scroll_down.value() == 0:
+        short_beep_sound()
+        counter_to_screen_off=utime.ticks_ms()
+
+        if not query_menu_on:
+            query_menu_on = True
+        else:
+            if scroll_up.value() == 0:
+                
+                if query_current_slide+1 >= len(loaded_data_from_sheet):
+                    query_current_slide=0
+                else:
+                    query_current_slide=query_current_slide+1
+            else:
+                if query_current_slide <=0:
+                    query_current_slide =  len(loaded_data_from_sheet) -1
+                else:
+                    query_current_slide=query_current_slide-1        
+    
+    if query_menu_on:
+        current = loaded_data_from_sheet[query_current_slide]
+        show_user_data(current['full_name'], current['quantity'])
+
+
     current_ticks = utime.ticks_ms()
     (stat, tag_type) = reader.request(reader.REQIDL)
     if stat == reader.OK:
@@ -223,27 +294,21 @@ while device_booted:
             card = int.from_bytes(bytes(uid),"little",False)
             print("CARD ID: "+str(card))
 
-            lcd_display.poweron()
-            
-
-            # execute_pin = pin_14.value()
-            
-
-            # if execute_pin == 0:
+            # lcd_display.poweron()
             counter_to_screen_off=None
-            
-            ########## Here read tag ############
+            query_menu_on=False
+            query_current_slide=0
 
+
+            ########## Here read tag ############
+    
             lcd_display.fill(0)
             lcd_display.blit(loading_fb, 48, 4)
             font_writer.set_textpos(5, 40)
             font_writer.printstring("Reading TAG")
             lcd_display.show()
             
-            # utime.sleep(1)
-            # update_result = increment_quantity_by_id("22222")
             update_result = increment_quantity_by_id(str(card))
-            # update_result = increment_quantity_by_id("222221")
             
             if update_result is None:
                 # user not found
@@ -266,20 +331,35 @@ while device_booted:
 
             else:
                 read_tag_sound()
+                update_local_loaded_data(str(card))
                 print("Result ", update_result)
                 # update excel doc and retreive data about name and quantity
                 # after updating document show this
-                show_user_data_after_increment(update_result['user_name'], update_result['quantity'])
+                show_user_data(update_result['user_name'], update_result['quantity'])
                 utime.sleep(8)
                 show_normal_screen()
 
 
     
     if counter_to_screen_off is not None and utime.ticks_diff(current_ticks, counter_to_screen_off) > 12000:
+        query_menu_on = False
         lcd_display.fill(0)
         lcd_display.show()
         counter_to_screen_off = None
 
-    utime.sleep_ms(500)
+    if query_menu_on:
+        utime.sleep_ms(35)
+    else:
+        utime.sleep_ms(500)
 
 
+
+
+###################################################
+############## TODO ##############################
+##################################################
+
+# 1) Failback to internal flash
+# 2) Notepad logs
+# 3) Sleep mode optimize
+# 4) led for deeep sleep mode

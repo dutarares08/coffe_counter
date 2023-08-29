@@ -17,7 +17,10 @@ def create_csv():
         file.write(header)
         for member in member_list:
             file.write('{},{},0\n'.format(member['tag_id'], member['full_name']))
+    utime.sleep(0.7)
     return True
+
+
 
 
 
@@ -47,9 +50,30 @@ def increment_quantity_by_id(tag_id):
 
     except Exception as e:
         return None
+    # print("New lines list ", new_lines)
+
 
     if user_found is None:
-        return None
+        # here check if existing in member_list array of dict. If so it means
+        # was added after first excel generation and will add here at the end of list created above
+        found_on_dict = None
+
+        for member in member_list:
+            if member["tag_id"] == tag_id:
+                found_on_dict = member
+
+        if found_on_dict is None:
+            return None
+        
+
+        member_name = found_on_dict['full_name']
+        to_append=f"{tag_id},{member_name},1\n"
+        new_lines.append(to_append)
+        user_found={
+            "user_name":str(member_name),
+            "quantity":"1",
+        }
+        
     
     try:
         with open("/sdcard/coffee_report.csv", 'w') as file:
@@ -62,3 +86,11 @@ def increment_quantity_by_id(tag_id):
 
 
 
+
+
+# [
+# 'Tag_ID,Full_Name,Quantity\n', 
+#  '17412652183861270,Rares D.,6\n', 
+#  '17250431722076182,Dragos R.,5\n', 
+#  '17385414457571350,Silviu A.,0\n', 
+#  '17385554413107222,Radu C.,1\n', '17433380333565974,Valentin B.,0\n', '17208063497091094,Alex B.,0\n']

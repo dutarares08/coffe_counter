@@ -1,6 +1,6 @@
-# from mfrc522 import MFRC522
-# import utime
-# import machine
+from mfrc522 import MFRC522
+import utime
+import machine
 
 
 
@@ -16,26 +16,26 @@
 # utime.sleep(6)
 # led.off()
 
-# # reader = MFRC522(spi_id=1,sck=10,miso=12,mosi=11,cs=9,rst=22)
+reader = MFRC522(spi_id=1,sck=10,miso=12,mosi=11,cs=9,rst=22)
  
-# # print("Bring TAG closer...")
+# print("Bring TAG closer...")
 # # print("")
  
 
-# # #reader.init()
-# # while True:
-# #     # reader.init()
-# #     # reader.sleep()
+reader.init()
+while True:
+    reader.init()
+    # reader.sleep()
 
-# #     (stat, tag_type) = reader.request(reader.REQIDL)
-# #     if stat == reader.OK:
-# #         (stat, uid) = reader.SelectTagSN()
-# #         if stat == reader.OK:
-# #             card = int.from_bytes(bytes(uid),"little",False)
-# #             print("CARD ID: "+str(card))
+    (stat, tag_type) = reader.request(reader.REQIDL)
+    if stat == reader.OK:
+        (stat, uid) = reader.SelectTagSN()
+        if stat == reader.OK:
+            card = int.from_bytes(bytes(uid),"little",False)
+            print("CARD ID: "+str(card))
 
 
-# # utime.sleep_ms(500) 
+    utime.sleep_ms(500) 
 
 
 
@@ -123,38 +123,38 @@
 
 
 
-import machine
-import time
-# interrupt_flag=0
-# debounce_time=0
-# pin = Pin(15, Pin.IN, Pin.PULL_UP)
-led = machine.Pin("LED", machine.Pin.OUT)
-# count=0
+# import machine
+# import time
+# # interrupt_flag=0
+# # debounce_time=0
+# # pin = Pin(15, Pin.IN, Pin.PULL_UP)
+# led = machine.Pin("LED", machine.Pin.OUT)
+# # count=0
 
-# def callback(pin):
-#     global interrupt_flag, debounce_time
-#     if (time.ticks_ms()-debounce_time) > 500:
-#         interrupt_flag= 1
-#         debounce_time=time.ticks_ms()
+# # def callback(pin):
+# #     global interrupt_flag, debounce_time
+# #     if (time.ticks_ms()-debounce_time) > 500:
+# #         interrupt_flag= 1
+# #         debounce_time=time.ticks_ms()
 
-# pin.irq(trigger=Pin.IRQ_FALLING, handler=callback)
+# # pin.irq(trigger=Pin.IRQ_FALLING, handler=callback)
+
+# # while True:
+# #     if interrupt_flag is 1:
+# #         interrupt_flag=0
+# #         print("Interrupt Detected")
+# #         led.toggle()
+# #     lightsleep()
+
+# # if machine.reset_cause() == machine.DEEPSLEEP_RESET:
+# #     print('woke from a deep sleep')
+
+# # # put the device to sleep for 10 seconds
+
 
 # while True:
-#     if interrupt_flag is 1:
-#         interrupt_flag=0
-#         print("Interrupt Detected")
-#         led.toggle()
-#     lightsleep()
-
-# if machine.reset_cause() == machine.DEEPSLEEP_RESET:
-#     print('woke from a deep sleep')
-
-# # put the device to sleep for 10 seconds
-
-
-while True:
-    print("Hello there")
-    machine.deepsleep(2000)
-    # pyb.wifi()
-    led.on()
-    print("Byee")
+#     print("Hello there")
+#     machine.deepsleep(2000)
+#     # pyb.wifi()
+#     led.on()
+#     print("Byee")
