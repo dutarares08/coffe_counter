@@ -1,5 +1,6 @@
 from machine import Pin, SPI, I2C, PWM
 from ssd1306 import SSD1306_I2C
+from mfrc522 import MFRC522
 from utils import increment_quantity_by_id, create_csv
 from sdcard import SDCard
 import uos
@@ -61,11 +62,14 @@ lcd_i2c=I2C(0, scl=lcd_scl, sda=lcd_sda, freq=200000)
 ##################################################
 lcd_display = SSD1306_I2C(DISPLAY_WIDTH, DISPLAY_HEIGHT, lcd_i2c)
 font_writer = writer.Writer(lcd_display, freesans20)
+# reader = MFRC522(spi_id=0,sck=6,miso=4,mosi=7,cs=5,rst=22)
+reader = MFRC522(spi_id=1,sck=10,miso=12,mosi=11,cs=9,rst=22)
 
 try:
     sdcard = SDCard(sdcard_spi, sdcard_csn)
     no_sd_card_err = False
 except Exception as e:
+    print("Exceptie, ", e)
     no_sd_card_err = True
 
 ###################################################
@@ -200,60 +204,74 @@ if device_booted:
 
 
 
+# poweroff() for display
 
 
 # temporar
+lcd_display.poweroff()
 pin_14 = Pin(14, mode=Pin.IN, pull=Pin.PULL_UP)
 
 
 while device_booted:
     current_ticks = utime.ticks_ms()
+    (stat, tag_type) = reader.request(reader.REQIDL)
+    if stat == reader.OK:
+        (stat, uid) = reader.SelectTagSN()
+        if stat == reader.OK:
 
-    execute_pin = pin_14.value()
-    
+            # here start show animation
+            card = int.from_bytes(bytes(uid),"little",False)
+            print("CARD ID: "+str(card))
 
-    if execute_pin == 0:
-        counter_to_screen_off=None
-        
-        ########## Here read tag ############
+            lcd_display.poweron()
+            
 
-        lcd_display.fill(0)
-        lcd_display.blit(loading_fb, 48, 4)
-        font_writer.set_textpos(5, 40)
-        font_writer.printstring("Reading TAG")
-        lcd_display.show()
-        
-        # utime.sleep(1)
-        update_result = increment_quantity_by_id("22222")
-        # update_result = increment_quantity_by_id("222221")
-        
-        if update_result is None:
-            # user not found
+            # execute_pin = pin_14.value()
+            
+
+            # if execute_pin == 0:
+            counter_to_screen_off=None
+            
+            ########## Here read tag ############
+
             lcd_display.fill(0)
-            lcd_display.blit(warning_fb, 49, 4)
-            font_writer.set_textpos(20, 40)
-            font_writer.printstring("Not Found")
+            lcd_display.blit(loading_fb, 48, 4)
+            font_writer.set_textpos(5, 40)
+            font_writer.printstring("Reading TAG")
             lcd_display.show()
-            error_sound()
-            utime.sleep(3)
-            show_normal_screen()
-        elif update_result is False:
-            lcd_display.fill(0)
-            lcd_display.blit(warning_fb, 49, 4)
-            font_writer.set_textpos(20, 40)
-            font_writer.printstring("Please Reboot")
-            lcd_display.show()
-            error_sound()
-            utime.sleep(3)
+            
+            # utime.sleep(1)
+            # update_result = increment_quantity_by_id("22222")
+            update_result = increment_quantity_by_id(str(card))
+            # update_result = increment_quantity_by_id("222221")
+            
+            if update_result is None:
+                # user not found
+                lcd_display.fill(0)
+                lcd_display.blit(warning_fb, 49, 4)
+                font_writer.set_textpos(20, 40)
+                font_writer.printstring("Not Found")
+                lcd_display.show()
+                error_sound()
+                utime.sleep(3)
+                show_normal_screen()
+            elif update_result is False:
+                lcd_display.fill(0)
+                lcd_display.blit(warning_fb, 49, 4)
+                font_writer.set_textpos(20, 40)
+                font_writer.printstring("Please Reboot")
+                lcd_display.show()
+                error_sound()
+                utime.sleep(3)
 
-        else:
-            read_tag_sound()
-            print("Result ", update_result)
-            # update excel doc and retreive data about name and quantity
-            # after updating document show this
-            show_user_data_after_increment(update_result['user_name'], update_result['quantity'])
-            utime.sleep(8)
-            show_normal_screen()
+            else:
+                read_tag_sound()
+                print("Result ", update_result)
+                # update excel doc and retreive data about name and quantity
+                # after updating document show this
+                show_user_data_after_increment(update_result['user_name'], update_result['quantity'])
+                utime.sleep(8)
+                show_normal_screen()
 
 
     
