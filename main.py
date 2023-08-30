@@ -7,7 +7,7 @@
 from machine import Pin, SPI, I2C, PWM, deepsleep
 from ssd1306 import SSD1306_I2C
 from mfrc522 import MFRC522
-from utils import increment_quantity_by_id, create_csv
+from utils import increment_quantity_by_id, create_csv, create_excel_backup_before_deepsleep, delete_local_logs
 from sdcard import SDCard
 import uos
 import utime
@@ -16,14 +16,17 @@ import writer
 import framebuf
 
 
+
+MASTER_TAG_ID="219963896" # Warning! Once deleted 
+
 ###################################################
 ########    Global variables
 ##################################################
 DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT= 64
 SCREEN_OFF_TIMEOUT = 18*1000 # 18 Seconds
-# DEEP_SLEEP_TIMOUT =  30*1000 # 60 minutes ##############3testtt
-DEEP_SLEEP_TIMEOUT =  60*60*1000 # 60 minutes
+# DEEP_SLEEP_TIMEOUT =  30*1000 # 60 minutes ##############3testtt
+DEEP_SLEEP_TIMEOUT =  50*60*1000 # 60 minutes
 EXIT_MENU_TIMEOUT = 6*1000
 
 loaded_data_from_sheet = [] # See data struct type in member list
@@ -36,6 +39,7 @@ counter_to_screen_off=None
 query_menu_on = False
 query_current_slide = 0
 query_menu_timmer = None
+timeout_erasing_logs = None
 
 
 
@@ -189,7 +193,10 @@ def boot_setup():
 
 
 def update_local_loaded_data(tag_id):
+    
     global loaded_data_from_sheet
+
+    print("Loaded data", loaded_data_from_sheet)
     reconstructed_list = []
     for member in loaded_data_from_sheet:
         if member['tag_id'] == tag_id:
@@ -272,6 +279,7 @@ while device_booted:
 
 
     if scroll_up.value() == 0 or scroll_down.value() == 0:
+        print(loaded_data_from_sheet)
         
         if light_sleep_on:
             lcd_display.poweron()
@@ -286,7 +294,7 @@ while device_booted:
         else:
             if scroll_up.value() == 0:
                 
-                if query_current_slide+1 >= len(loaded_data_from_sheet):
+                if query_current_slide >= (len(loaded_data_from_sheet) -1) :
                     query_current_slide=0
                 else:
                     query_current_slide=query_current_slide+1
@@ -295,7 +303,8 @@ while device_booted:
                     query_current_slide =  len(loaded_data_from_sheet) -1
                 else:
                     query_current_slide=query_current_slide-1        
-    
+            # print(loaded_data_from_sheet)
+            # print(query_current_slide)
     if query_menu_on:
 
         current = loaded_data_from_sheet[query_current_slide]
@@ -312,6 +321,9 @@ while device_booted:
 
             card = int.from_bytes(bytes(uid),"little",False)
 
+
+
+
             counter_to_screen_off=None
             deep_sleep_timmer = utime.ticks_ms()
 
@@ -326,43 +338,82 @@ while device_booted:
             font_writer.set_textpos(5, 40)
             font_writer.printstring("Reading TAG")
             lcd_display.show()
-            
-            update_result = increment_quantity_by_id(str(card))
-            
-            if update_result is None:
-                # user not found
-                lcd_display.fill(0)
-                lcd_display.blit(warning_fb, 49, 4)
-                font_writer.set_textpos(20, 40)
-                font_writer.printstring("Not Found")
-                lcd_display.show()
-                error_sound()
-                utime.sleep(3)
-                show_normal_screen()
-            elif update_result is False:
-                lcd_display.fill(0)
-                lcd_display.blit(warning_fb, 49, 4)
-                font_writer.set_textpos(20, 40)
-                font_writer.printstring("Please Reboot")
-                lcd_display.show()
-                error_sound()
-                utime.sleep(3)
 
+
+            if str(card) == MASTER_TAG_ID:
+                if timeout_erasing_logs is not None:
+                    # perform deletion
+                    lcd_display.fill(0)
+                    lcd_display.blit(warning_fb, 49, 4)
+                    font_writer.set_textpos(20, 40)
+                    font_writer.printstring("Erasing...")
+                    lcd_display.show()
+                    delete_local_logs()
+                    utime.sleep_ms(400)
+                    
+                    lcd_display.fill(0)
+                    lcd_display.blit(warning_fb, 49, 4)
+                    font_writer.set_textpos(20, 40)
+                    font_writer.printstring("Done :)")
+                    lcd_display.show()
+                    utime.sleep_ms(900)
+
+                    timeout_erasing_logs = None
+                    show_normal_screen()
+
+                else:
+                    #show screen with message
+                    lcd_display.fill(0)
+                    lcd_display.text("Are you sure?", 0, 0)
+                    lcd_display.text("This action will", 0, 10)
+                    lcd_display.text("delete all logs", 0, 20)
+                    lcd_display.text("Scan Again to", 0, 40)
+                    lcd_display.text("perfrom action", 0, 50)
+                    lcd_display.show()
+                    timeout_erasing_logs=utime.ticks_ms()
+                
             else:
-                read_tag_sound()
-                update_local_loaded_data(str(card))
-                # print("Result ", update_result)
-                # update excel doc and retreive data about name and quantity
-                # after updating document show this
-                show_user_data(update_result['user_name'], update_result['quantity'])
-                utime.sleep(8)
-                show_normal_screen()
+
+                update_result = increment_quantity_by_id(str(card))
+            
+                if update_result is None:
+                    # user not found
+                    lcd_display.fill(0)
+                    lcd_display.blit(warning_fb, 49, 4)
+                    font_writer.set_textpos(20, 40)
+                    font_writer.printstring("Not Found")
+                    lcd_display.show()
+                    error_sound()
+                    utime.sleep(3)
+                    show_normal_screen()
+                elif update_result is False:
+                    lcd_display.fill(0)
+                    lcd_display.blit(warning_fb, 49, 4)
+                    font_writer.set_textpos(20, 40)
+                    font_writer.printstring("Please Reboot")
+                    lcd_display.show()
+                    error_sound()
+                    utime.sleep(3)
+
+                else:
+                    read_tag_sound()
+                    update_local_loaded_data(str(card))
+                    # print("Result ", update_result)
+                    # update excel doc and retreive data about name and quantity
+                    # after updating document show this
+                    show_user_data(update_result['user_name'], update_result['quantity'])
+                    utime.sleep(7)
+                    show_normal_screen()
 
 
     
     
 
-    
+    if timeout_erasing_logs is not None and utime.ticks_diff(current_ticks, timeout_erasing_logs) > 3000:
+        timeout_erasing_logs = None
+        show_normal_screen()
+
+
     if query_menu_timmer is not None and utime.ticks_diff(current_ticks, query_menu_timmer) > EXIT_MENU_TIMEOUT:
         query_menu_on = False
         query_current_slide = 0
@@ -376,14 +427,15 @@ while device_booted:
         counter_to_screen_off = None
         query_menu_timmer = None
 
-    if deep_sleep_timmer is not None and utime.ticks_diff(current_ticks, counter_to_screen_off) > DEEP_SLEEP_TIMEOUT:
+    if deep_sleep_timmer is not None and utime.ticks_diff(current_ticks, deep_sleep_timmer) > DEEP_SLEEP_TIMEOUT:
         reader.sleep()
         lcd_display.poweroff()
         status_led.value(0)
+        create_excel_backup_before_deepsleep(loaded_data_from_sheet)
         deepsleep()
     
     if query_menu_on:
-        utime.sleep_ms(35)
+        utime.sleep_ms(15)
     else:
         utime.sleep_ms(500)
 
@@ -398,3 +450,4 @@ while device_booted:
 # 2) Notepad logs - done
 # 3) Sleep mode optimize - done
 # 4) led for deeep sleep mode - done
+# 5) Before entering deep sleep make a 3rd backup on internal flash - progress

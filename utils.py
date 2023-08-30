@@ -95,10 +95,34 @@ def increment_quantity_by_id(tag_id):
 
 
 
+def create_excel_backup_before_deepsleep(variable_data):
+    """ Create internal backup before entering deep sleep """
+    try:
+        with open("/coffee_backup.csv", 'w') as file:
+            for user in variable_data:
+                full_name = user["full_name"]
+                tag_id = user["tag_id"]
+                quantity = user["quantity"]
+                file.write(f"{tag_id},{full_name},{quantity}\n")
+        utime.sleep_ms(300)
 
+        return True
+    except Exception as e:
+        return False
+    
+
+def delete_local_logs():
+    with open("/coffee_backup.csv", 'w') as file:
+        file.write("")
+    with open("/backup_logs.txt", "w") as file:
+        file.write("")
+
+    return True
+    
 # [
-# 'Tag_ID,Full_Name,Quantity\n', 
+#   'Tag_ID,Full_Name,Quantity\n', 
 #  '17412652183861270,Rares D.,6\n', 
 #  '17250431722076182,Dragos R.,5\n', 
 #  '17385414457571350,Silviu A.,0\n', 
-#  '17385554413107222,Radu C.,1\n', '17433380333565974,Valentin B.,0\n', '17208063497091094,Alex B.,0\n']
+#  '17385554413107222,Radu C.,1\n', '17433380333565974,Valentin B.,0\n', '17208063497091094,Alex B.,0\n'
+# ]

@@ -27,6 +27,10 @@ member_list = [
         "tag_id":"17297514428643350",
         "full_name":"Stefan M.",
     },
+    {
+        "tag_id":"17317026448291862",
+        "full_name":"George L.",
+    },
 ]
 
 
